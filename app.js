@@ -1,2 +1,2 @@
-const SSR = require('./libs/basicSSR')
-SSR.IO()
+const ssr = require('./libs/basicSSR')
+ssr.IO();
