@@ -37,7 +37,7 @@ function handleApiRequest(req, res) {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                userDb.updateUser(telegramId, data)
+                userDb.createOrUpdateUser(telegramId, data)
                     .then(() => {
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ success: true }));
@@ -65,7 +65,7 @@ function IO() {
         }
 
         let resFile;
-        if (req.url === "/") { resFile = "./index.html"; }
+        if (req.url === "/") { resFile = "./html/index.html"; }
         else { resFile = "." + req.url; }
 
         fs.readFile(resFile, (err, data) => {
@@ -84,7 +84,7 @@ function IO() {
         });
     }).listen(8080, "0.0.0.0", () => {
       console.log('Server is running on http://0.0.0.0:8080');
-      initializeDb(); // Ініціалізуємо БД при запуску
+      initializeDb(); 
     });
 }
 

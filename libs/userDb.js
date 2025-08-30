@@ -11,7 +11,7 @@ function createTable() {
     return new Promise((resolve, reject) => {
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
-            username TEXT NOT NULL,
+            username TEXT,
             telegram_id TEXT NOT NULL UNIQUE,
             progress INTEGER DEFAULT 0,
             current_stage INTEGER DEFAULT 1,
@@ -24,7 +24,7 @@ function createTable() {
     });
 }
 
-async function getUser(telegramId) {
+function getUser(telegramId) {
     return new Promise((resolve, reject) => {
         db.get(`SELECT * FROM users WHERE telegram_id = ?`, [telegramId], (err, row) => {
             if (err) return reject(err);
@@ -33,20 +33,33 @@ async function getUser(telegramId) {
     });
 }
 
-async function updateUser(telegramId, data) {
+function createOrUpdateUser(telegramId, data) {
     return new Promise((resolve, reject) => {
         const { progress, current_stage, available_water } = data;
-        db.run(`UPDATE users SET progress = ?, current_stage = ?, available_water = ? WHERE telegram_id = ?`,
-            [progress, current_stage, available_water, telegramId],
-            function(err) {
-                if (err) return reject(err);
-                resolve(this.changes);
-            });
+        db.get(`SELECT * FROM users WHERE telegram_id = ?`, [telegramId], (err, row) => {
+            if (err) return reject(err);
+
+            if (row) {
+                db.run(`UPDATE users SET progress = ?, current_stage = ?, available_water = ? WHERE telegram_id = ?`,
+                    [progress, current_stage, available_water, telegramId],
+                    function(updateErr) {
+                        if (updateErr) return reject(updateErr);
+                        resolve(this.changes);
+                    });
+            } else {
+                db.run(`INSERT INTO users (telegram_id, progress, current_stage, available_water) VALUES (?, ?, ?, ?)`,
+                    [telegramId, progress, current_stage, available_water],
+                    function(insertErr) {
+                        if (insertErr) return reject(insertErr);
+                        resolve(this.lastID);
+                    });
+            }
+        });
     });
 }
 
 module.exports = {
   createTable,
   getUser,
-  updateUser
+  createOrUpdateUser
 };
