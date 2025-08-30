@@ -18,7 +18,7 @@ function handleApiRequest(req, res) {
 
     if (pathname.startsWith('/api/user/') && req.method === 'GET') {
         const telegramId = pathname.split('/').pop();
-        userDb.getUser(telegramId)
+        userDb.getProgress(telegramId)
             .then(user => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(user));

@@ -33,6 +33,20 @@ function getUser(telegramId) {
     });
 }
 
+function getProgress(telegramId) {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM users WHERE telegram_id = ?`, [telegramId], (err, row) => {
+            if (err) return reject(err);
+            if (row) {
+                // Parse fruits_json back to an array
+                row.fruits = row.fruits_json ? JSON.parse(row.fruits_json) : null;
+                delete row.fruits_json;
+            }
+            resolve(row);
+        });
+    });
+}
+
 function createOrUpdateUser(telegramId, data) {
     return new Promise((resolve, reject) => {
         const { progress, current_stage, available_water } = data;

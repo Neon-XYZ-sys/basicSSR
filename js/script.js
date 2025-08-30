@@ -84,25 +84,63 @@ class FrutopiaGame {
     this.init();
     this.bindEvents();
     this.createInventoryGrid();
+    
+    // Додаємо слухача події перед закриттям сторінки
+    window.addEventListener('beforeunload', () => {
+        // Викликаємо функцію для збереження даних
+        this.saveUserData();
+    });
   }
 
   async init() {
-    document
-      .getElementById("waterBtn")
-      .addEventListener("click", () => this.waterPlant());
-    document
-      .getElementById("plant")
-      .addEventListener("click", () => this.clickPlant());
-    setInterval(() => this.generateWater(), 1000);
     if (this.telegramWebApp && this.telegramWebApp.initDataUnsafe.user) {
       this.telegramId = this.telegramWebApp.initDataUnsafe.user.id;
+      // Чекаємо, поки дані завантажаться з бекенда, перш ніж оновлювати UI
       await this.loadUserData();
     } else {
+      this.displayMessage("Use Telegram Web App.");
       console.error("Game is not running in Telegram Web App or user data is not available.");
-      document.body.innerHTML = "<h2>Use Telegram Web App!</h2>";
       return;
     }
+
+    document.getElementById("waterBtn").addEventListener("click", () => this.waterPlant());
+    document.getElementById("plant").addEventListener("click", () => this.clickPlant());
+    setInterval(() => this.generateWater(), 1000);
     this.updateUI();
+  }
+
+  async loadUserData() {
+    try {
+      const response = await fetch(`/api/user/${this.telegramId}`);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      const userData = await response.json();
+      if (userData) {
+        this.currentProgress = userData.progress;
+        this.currentStage = userData.current_stage;
+        this.availableWater = userData.available_water;
+        this.maxProgress = this.stageThresholds[this.currentStage - 1];
+        if (userData.fruits) {
+            this.fruits = userData.fruits;
+            this.fruitsCollected = this.fruits.filter(f => f.collected).length;
+            this.currentFruitIndex = this.fruits.findIndex(f => !f.unlocked) || this.fruits.length;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load user data:", error);
+    }
+  }
+
+  saveUserData() {
+    const data = {
+      progress: this.currentProgress,
+      current_stage: this.currentStage,
+      available_water: this.availableWater,
+      fruits: this.fruits
+    };
+    
+    navigator.sendBeacon(`/api/user/${this.telegramId}`, JSON.stringify(data));
   }
 
   bindEvents() {
@@ -137,7 +175,6 @@ class FrutopiaGame {
       const slot = document.createElement("div");
       slot.className = "fruit-slot";
 
-      // Правильная логика разблокировки
       if (fruit.collected) {
         slot.classList.add("collected");
         slot.classList.add("unlocked");
@@ -160,7 +197,6 @@ class FrutopiaGame {
               ${!fruit.unlocked ? '<div class="lock-icon">🔒</div>' : ""}
               ${fruit.collected ? '<div class="collected-badge">✓</div>' : ""}
           `;
-
       grid.appendChild(slot);
     });
   }
@@ -168,7 +204,7 @@ class FrutopiaGame {
   updateInventoryUI() {
     const collectedCount = this.fruits.filter((f) => f.collected).length;
     const countEl = document.getElementById("inventoryCount");
-    if (countEl) countEl.textContent = `${collectedCount}/50`;
+    if (countEl) countEl.textContent = `${collectedCount}/${this.fruits.length}`;
     this.createInventoryGrid();
   }
 
@@ -186,6 +222,7 @@ class FrutopiaGame {
       this.currentProgress++;
       this.checkStageUp();
       this.updateUI();
+      this.saveUserData();
     }
   }
 
@@ -195,6 +232,7 @@ class FrutopiaGame {
       this.currentProgress++;
       this.checkStageUp();
       this.updateUI();
+      this.saveUserData();
     }
   }
 
@@ -202,11 +240,10 @@ class FrutopiaGame {
     if (this.currentProgress >= this.maxProgress) {
       this.currentStage++;
       if (this.currentStage > this.maxStage) {
-        // Полный цикл завершен - собираем фрукт
         this.currentStage = 1;
         this.currentProgress = 0;
         this.maxProgress = this.stageThresholds[0];
-        this.waterPerSecond = Math.floor(this.waterPerSecond * 1.2); // Увеличиваем производство воды
+        this.waterPerSecond = Math.floor(this.waterPerSecond * 1.2);
         this.collectFruit();
         return;
       }
@@ -221,7 +258,7 @@ class FrutopiaGame {
       fruit.collected = true;
       fruit.unlocked = true;
 
-      alert(`🌟 Новый фрукт собран: ${fruit.name}!`);
+      this.displayMessage(`🌟 Новий фрукт зібрано: ${fruit.name}!`);
 
       this.fruitsCollected++;
       this.currentFruitIndex++;
@@ -236,36 +273,18 @@ class FrutopiaGame {
     }
   }
 
-  updateUI() {
-    if (this.currentPage === "inventory") this.updateInventoryUI();
-
-    document.getElementById(
-      "progressText"
-    ).textContent = `${this.currentProgress} / ${this.maxProgress}`;
-
-    const progressBar = document.getElementById("progressBar");
-    const segments = 8;
-    const filled = Math.floor(
-      (this.currentProgress / this.maxProgress) * segments
-    );
-    progressBar.innerHTML = "";
-    for (let i = 0; i < segments; i++) {
-      const seg = document.createElement("div");
-      seg.className = "progress-segment" + (i < filled ? "" : " empty");
-      progressBar.appendChild(seg);
+  displayMessage(message) {
+    const messageBox = document.getElementById("messageBox");
+    const messageText = document.getElementById("messageText");
+    if (messageBox && messageText) {
+      messageText.textContent = message;
+      messageBox.style.display = "block";
+      setTimeout(() => {
+        messageBox.style.display = "none";
+      }, 3000);
+    } else {
+        console.warn("Message box elements not found. Message: " + message);
     }
-
-    const stage = this.stages[this.currentStage - 1] || this.stages[0];
-    document.getElementById("plantEmoji").textContent = stage.emoji;
-    document.getElementById("plantName").textContent = `(${stage.name})`;
-    document.getElementById(
-      "stageText"
-    ).textContent = `${stage.name} ${this.currentStage}/${this.maxStage}`;
-    document.getElementById(
-      "waterCount"
-    ).textContent = `${this.availableWater} / ${this.maxWater}`;
-    document.getElementById("fruitCount").textContent =
-      this.fruitsCollected.toString();
   }
 }
 
